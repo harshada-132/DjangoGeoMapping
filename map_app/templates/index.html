@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoPulse</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 20%;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            background-color: #f8f8f8;
+            position: relative;
+        }
+        .map-container {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        .dropdown {
+            margin-bottom: 20px;
+        }
+        .dropdown select {
+            width: 100%;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>GeoPulse</h2>
+        <div class="dropdown">
+            <label for="districtSelect">District</label>
+            <select id="districtSelect">
+                <option value="">Select a district</option>
+            </select>
+        </div>
+        <div class="dropdown">
+            <label for="villageSelect">Village</label>
+            <select id="villageSelect">
+                <option value="">Select a village</option>
+            </select>
+        </div>
+    </div>
+    <div class="map-container">
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const villages = {{ villages|safe }};
+            
+            // Initialize the Leaflet map
+            var map = L.map('map').setView([18.5204, 73.8567], 8); // Default view set to Pune
+
+            // Add the tile layer (OpenStreetMap)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: 'Map data © <a href="https://openstreetmap.org">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            // Populate district dropdown
+            const districtSelect = document.getElementById('districtSelect');
+            const villageSelect = document.getElementById('villageSelect');
+
+            const districts = [...new Set(villages.map(village => village.district))];
+            districts.forEach(district => {
+                const option = document.createElement('option');
+                option.value = district;
+                option.textContent = district;
+                districtSelect.appendChild(option);
+            });
+
+            // Populate village dropdown based on selected district
+            districtSelect.addEventListener('change', function() {
+                const selectedDistrict = this.value;
+                villageSelect.innerHTML = '<option value="">Select a village</option>';
+
+                const filteredVillages = villages.filter(village => village.district === selectedDistrict);
+                filteredVillages.forEach(village => {
+                    const option = document.createElement('option');
+                    option.value = village.name;
+                    option.dataset.lat = village.lat;
+                    option.dataset.lng = village.lng;
+                    option.textContent = village.name;
+                    villageSelect.appendChild(option);
+                });
+            });
+
+            // Add marker and draw polyline for selected village
+            villageSelect.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                const lat = parseFloat(selectedOption.dataset.lat);
+                const lng = parseFloat(selectedOption.dataset.lng);
+
+                if (lat && lng) {
+                    // Clear previous markers and polylines
+                    map.eachLayer(function (layer) {
+                        if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+                            map.removeLayer(layer);
+                        }
+                    });
+
+                    // Add a marker for the selected village
+                    L.marker([lat, lng]).addTo(map)
+                        .bindPopup(selectedOption.value)
+                        .openPopup();
+
+                    // Zoom to the selected village
+                    map.setView([lat, lng], 13);
+
+                    // Draw polylines from the selected village to all other villages in the district
+                    const selectedDistrict = districtSelect.value;
+                    const filteredVillages = villages.filter(village => village.district === selectedDistrict);
+                    filteredVillages.forEach(village => {
+                        if (village.name !== selectedOption.value) {
+                            L.polyline([[lat, lng], [village.lat, village.lng]], { color: 'blue' }).addTo(map);
+                        }
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
